@@ -227,15 +227,18 @@ async function writeJournal({ demande_client, data }) {
 
 async function writeDoctrine(items) {
   if (!Array.isArray(items) || items.length === 0) return;
-  const now = new Date().toISOString();
+
   for (const it of items) {
     const props = {};
     props[PROP_D_TITLE] = title(it.titre || "Règle");
     setIf(props, PROP_D_RULE, rt(it.contenu || ""));
     setIf(props, PROP_D_CATEGORY, select(it.categorie));
-    setIf(props, PROP_D_STATUS, select(it.statut));
-    setIf(props, PROP_D_DATE, dateProp(now));
-    await notion.pages.create({ parent: { database_id: DB_DOCTRINE }, properties: props });
+    props[PROP_D_ACTIVE] = { checkbox: true }; // par défaut actif
+
+    await notion.pages.create({
+      parent: { database_id: DB_DOCTRINE },
+      properties: props,
+    });
   }
 }
 
