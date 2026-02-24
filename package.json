@@ -1,0 +1,14 @@
+{
+  "name": "innovacse-bras-droit",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "express": "^4.19.2",
+    "openai": "^4.59.0"
+  }
+}
