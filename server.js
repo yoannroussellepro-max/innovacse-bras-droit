@@ -34,12 +34,11 @@ const PROP_J_AGENTS = "Agents mobilisés";
 const PROP_J_RESULT = "Résultat produit";
 const PROP_J_NEXT = "Prochaine action";
 
-// Doctrine
-const PROP_D_TITLE = "Nom";
-const PROP_D_RULE = "Règle / Contenu"; // si tu n'as pas cette colonne, mets "Contenu" ou autre
-const PROP_D_CATEGORY = "Catégorie";   // optional
-const PROP_D_STATUS = "Statut";        // optional
-const PROP_D_DATE = "Dernière MAJ";    // optional
+// Doctrine (DOCTRINE_VIVANTE)
+const PROP_D_TITLE = "Nom";      // title
+const PROP_D_RULE = "Version";   // rich_text (contenu)
+const PROP_D_CATEGORY = "Type";  // select (catégorie)
+const PROP_D_ACTIVE = "Actif";   // checkbox
 
 // Projets
 const PROP_P_TITLE = "Nom";
