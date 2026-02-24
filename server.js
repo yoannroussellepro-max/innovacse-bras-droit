@@ -30,10 +30,7 @@ if (!DB_DECISIONS) throw new Error("Missing NOTION_DB_DECISIONS_STRATEGIQUES");
 // Journal
 const PROP_J_TITLE = "Nom";
 const PROP_J_DATE = "Date";
-const PROP_J_DECISION = "Décision prise";
-const PROP_J_AGENTS = "Agents mobilisés";
 const PROP_J_RESULT = "Résultat produit";
-const PROP_J_NEXT = "Prochaine action";
 
 // Doctrine
 const PROP_D_TITLE = "Nom";
@@ -41,13 +38,9 @@ const PROP_D_RULE = "Version";
 const PROP_D_CATEGORY = "Type";
 const PROP_D_ACTIVE = "Actif";
 
-// Projets (adapter si besoin plus tard)
+// Projets (écriture minimale sûre)
 const PROP_P_TITLE = "Nom";
-const PROP_P_STATUS = "Statut";
-const PROP_P_PRIORITY = "Priorité";
 const PROP_P_OBJECTIF = "Objectif";
-const PROP_P_NEXT = "Prochaines actions";
-const PROP_P_UPDATED = "Dernière MAJ";
 
 // Décisions
 const PROP_S_TITLE = "Nom";
@@ -79,15 +72,6 @@ function dateProp(iso) {
 
 function select(name) {
   return name ? { select: { name } } : undefined;
-}
-
-function multiSelect(names) {
-  return { multi_select: (names || []).filter(Boolean).map(n => ({ name: n })) };
-}
-
-function setIf(obj, key, value) {
-  if (!value) return;
-  obj[key] = value;
 }
 
 // =====================
@@ -135,12 +119,11 @@ async function loadMemory() {
     })),
     projets: projets.map(p => ({
       nom: extractTitle(p),
-      statut: extractRich(p, PROP_P_STATUS),
       objectif: extractRich(p, PROP_P_OBJECTIF),
     })),
     decisions: decisions.map(p => ({
       nom: extractTitle(p),
-      decision: extractRich(p, PROP_S_DECISION),
+      justification: extractRich(p, PROP_S_JUSTIFICATION),
     })),
   };
 }
@@ -159,12 +142,6 @@ DOCTRINE: ${JSON.stringify(memory.doctrine)}
 PROJETS: ${JSON.stringify(memory.projets)}
 DECISIONS: ${JSON.stringify(memory.decisions)}
 
-Tu dois :
-1. Clarifier
-2. Orchestrer
-3. Produire
-4. Proposer écritures Notion
-
 Réponds UNIQUEMENT en JSON strict :
 
 {
@@ -172,10 +149,9 @@ Réponds UNIQUEMENT en JSON strict :
   "plan_agents": "...",
   "livrable_final": "...",
   "ecritures_notion": {
-    "journal": "...",
     "doctrine": [{ "titre": "...", "categorie": "...", "contenu": "..." }],
-    "decisions": [{ "titre": "...", "decision": "...", "contexte": "...", "rationale": "...", "statut": "Active" }],
-    "projets": [{ "titre": "...", "statut": "...", "priorite": "...", "objectif": "...", "prochaines_actions": "..." }]
+    "decisions": [{ "titre": "...", "decision": "...", "rationale": "...", "statut": "Active", "domaine": "Stratégie" }],
+    "projets": [{ "titre": "...", "objectif": "..." }]
   },
   "prochaines_actions": ["...", "..."]
 }
@@ -199,11 +175,14 @@ app.post("/run", async (req, res) => {
       temperature: 0.2,
       input: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: `
+        {
+          role: "user",
+          content: `
 DEMANDE: ${demande_client}
 CONTEXTE: ${contexte}
 CONTRAINTES: ${contraintes}
-` }
+`
+        }
       ],
     });
 
@@ -221,7 +200,7 @@ CONTRAINTES: ${contraintes}
     });
 
     // DOCTRINE
-    for (const d of data.ecritures_notion.doctrine || []) {
+    for (const d of data.ecritures_notion?.doctrine || []) {
       await notion.pages.create({
         parent: { database_id: DB_DOCTRINE },
         properties: {
@@ -234,18 +213,21 @@ CONTRAINTES: ${contraintes}
     }
 
     // DECISIONS
-    for (const s of data.ecritures_notion.decisions || []) {
+    for (const s of data.ecritures_notion?.decisions || []) {
       await notion.pages.create({
         parent: { database_id: DB_DECISIONS },
         properties: {
           [PROP_S_TITLE]: title(s.titre),
-          [PROP_S_DECISION]: rt(s.decision),
+          [PROP_S_DATE]: dateProp(new Date().toISOString()),
+          [PROP_S_STATUS]: select(s.statut || "Active"),
+          [PROP_S_DOMAINE]: select(s.domaine || "Stratégie"),
+          [PROP_S_JUSTIFICATION]: rt(s.rationale || s.decision || "")
         }
       });
     }
 
     // PROJETS
-    for (const p of data.ecritures_notion.projets || []) {
+    for (const p of data.ecritures_notion?.projets || []) {
       await notion.pages.create({
         parent: { database_id: DB_PROJETS },
         properties: {
