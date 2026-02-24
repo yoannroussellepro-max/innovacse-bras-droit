@@ -1,17 +1,13 @@
 import express from "express";
-import cors from "cors";
 import OpenAI from "openai";
 import { Client as NotionClient } from "@notionhq/client";
 
 const app = express();
-app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 // ENV
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const NOTION_TOKEN = process.env.NOTION_TOKEN;
-
-// Notion DB IDs (tes 4 bases)
 const DB_JOURNAL = process.env.NOTION_DB_JOURNAL_AGENT_DIRECTEUR;
 
 if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
@@ -56,6 +52,15 @@ Aucun texte hors JSON.
 // ---- ROUTES ----
 app.get("/", (req, res) => res.status(200).send("OK"));
 
+// Debug env (sans exposer les secrets)
+app.get("/debug-env", (req, res) => {
+  res.json({
+    hasOpenAI: !!process.env.OPENAI_API_KEY,
+    hasNotionToken: !!process.env.NOTION_TOKEN,
+    dbJournal: process.env.NOTION_DB_JOURNAL_AGENT_DIRECTEUR || null
+  });
+});
+
 app.post("/run", async (req, res) => {
   try {
     const { demande_client, contexte, contraintes } = req.body || {};
@@ -85,7 +90,7 @@ ${contraintes || ""}`.trim();
     try {
       data = JSON.parse(out);
     } catch {
-      // si le modèle n'a pas renvoyé du JSON strict (rare), on encapsule
+      // fallback si JSON non strict
       data = {
         brief_valide: out,
         structure_qualiopi: "",
@@ -99,9 +104,7 @@ ${contraintes || ""}`.trim();
     await notion.pages.create({
       parent: { database_id: DB_JOURNAL },
       properties: {
-        // IMPORTANT: le nom de la colonne "Nom" / "Sujet" est le Title de ta DB.
-        // Si ta colonne titre s'appelle "Nom", Notion l’appelle "Nom" ici.
-        // Si elle s'appelle autrement (ex: "Sujet"), renomme ci-dessous.
+        // Title column de ta DB = "Nom" (d’après ta sortie PowerShell)
         "Nom": { title: [{ text: { content: (demande_client || "Run IA").slice(0, 90) } }] },
         "Date": { date: { start: now } },
         "Décision prise": { rich_text: [{ text: { content: "Run pipeline (Chef→Architecte→Production)" } }] },
