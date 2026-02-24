@@ -1,8 +1,10 @@
 import express from "express";
+import cors from "cors";
 import OpenAI from "openai";
 import { Client as NotionClient } from "@notionhq/client";
 
 const app = express();
+app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 // ENV
