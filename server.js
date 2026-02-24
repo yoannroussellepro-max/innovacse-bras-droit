@@ -49,13 +49,12 @@ const PROP_P_OBJECTIF = "Objectif";
 const PROP_P_NEXT = "Prochaines actions";
 const PROP_P_UPDATED = "Dernière MAJ";
 
-// Décisions (adapter si besoin plus tard)
+// Décisions
 const PROP_S_TITLE = "Nom";
-const PROP_S_DATE = "Date";
-const PROP_S_DECISION = "Décision";
-const PROP_S_CONTEXTE = "Contexte";
-const PROP_S_RATIONALE = "Rationale";
-const PROP_S_STATUS = "Statut";
+const PROP_S_DATE = "date";
+const PROP_S_STATUS = "statut";
+const PROP_S_JUSTIFICATION = "justification";
+const PROP_S_DOMAINE = "domaine";
 
 // =====================
 // CLIENTS
