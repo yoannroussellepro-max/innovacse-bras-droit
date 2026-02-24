@@ -24,8 +24,9 @@ if (!DB_PROJETS) throw new Error("Missing NOTION_DB_PROJETS");
 if (!DB_DECISIONS) throw new Error("Missing NOTION_DB_DECISIONS_STRATEGIQUES");
 
 // =====================
-// Notion property names (AJUSTE SI BESOIN)
+// NOTION PROPERTY MAPPING
 // =====================
+
 // Journal
 const PROP_J_TITLE = "Nom";
 const PROP_J_DATE = "Date";
@@ -34,319 +35,234 @@ const PROP_J_AGENTS = "Agents mobilisés";
 const PROP_J_RESULT = "Résultat produit";
 const PROP_J_NEXT = "Prochaine action";
 
-// Doctrine (DOCTRINE_VIVANTE)
-const PROP_D_TITLE = "Nom";      // title
-const PROP_D_RULE = "Version";   // rich_text (contenu)
-const PROP_D_CATEGORY = "Type";  // select (catégorie)
-const PROP_D_ACTIVE = "Actif";   // checkbox
+// Doctrine
+const PROP_D_TITLE = "Nom";
+const PROP_D_RULE = "Version";
+const PROP_D_CATEGORY = "Type";
+const PROP_D_ACTIVE = "Actif";
 
-// Projets
+// Projets (adapter si besoin plus tard)
 const PROP_P_TITLE = "Nom";
-const PROP_P_STATUS = "Statut";        // optional
-const PROP_P_PRIORITY = "Priorité";    // optional
-const PROP_P_OBJECTIF = "Objectif";    // optional
-const PROP_P_NEXT = "Prochaines actions"; // optional
-const PROP_P_DUE = "Échéance";         // optional
-const PROP_P_UPDATED = "Dernière MAJ"; // optional
+const PROP_P_STATUS = "Statut";
+const PROP_P_PRIORITY = "Priorité";
+const PROP_P_OBJECTIF = "Objectif";
+const PROP_P_NEXT = "Prochaines actions";
+const PROP_P_UPDATED = "Dernière MAJ";
 
-// Décisions
+// Décisions (adapter si besoin plus tard)
 const PROP_S_TITLE = "Nom";
-const PROP_S_DATE = "Date";            // optional
-const PROP_S_DECISION = "Décision";    // optional
-const PROP_S_CONTEXTE = "Contexte";    // optional
-const PROP_S_RATIONALE = "Rationale";  // optional
-const PROP_S_STATUS = "Statut";        // optional
+const PROP_S_DATE = "Date";
+const PROP_S_DECISION = "Décision";
+const PROP_S_CONTEXTE = "Contexte";
+const PROP_S_RATIONALE = "Rationale";
+const PROP_S_STATUS = "Statut";
 
 // =====================
-// Clients
+// CLIENTS
 // =====================
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const notion = new NotionClient({ auth: NOTION_TOKEN });
 
 // =====================
-// Helpers Notion property builders
+// HELPERS
 // =====================
 function rt(text) {
   return { rich_text: [{ text: { content: String(text || "").slice(0, 1900) } }] };
 }
+
 function title(text) {
   return { title: [{ text: { content: String(text || "").slice(0, 120) } }] };
 }
+
 function dateProp(iso) {
   return { date: { start: iso } };
 }
+
 function select(name) {
   return name ? { select: { name } } : undefined;
 }
+
 function multiSelect(names) {
-  return { multi_select: (names || []).filter(Boolean).map((n) => ({ name: n })) };
+  return { multi_select: (names || []).filter(Boolean).map(n => ({ name: n })) };
 }
 
-// Safe set property if value exists
 function setIf(obj, key, value) {
-  if (value === undefined || value === null) return;
+  if (!value) return;
   obj[key] = value;
 }
 
 // =====================
-// Read memory from Notion (latest items)
+// LECTURE MÉMOIRE
 // =====================
-async function fetchLatestFromDb(database_id, pageSize = 10) {
+async function fetchLatest(database_id) {
   const res = await notion.databases.query({
     database_id,
-    page_size: pageSize,
+    page_size: 10,
     sorts: [{ timestamp: "last_edited_time", direction: "descending" }],
   });
   return res.results || [];
 }
 
-function extractTitle(page, fallback = "") {
-  const props = page?.properties || {};
-  for (const k of Object.keys(props)) {
-    if (props[k]?.type === "title") {
-      const arr = props[k]?.title || [];
-      return arr.map((t) => t?.plain_text || "").join("").trim() || fallback;
+function extractTitle(page) {
+  const props = page.properties;
+  for (const key in props) {
+    if (props[key].type === "title") {
+      return props[key].title.map(t => t.plain_text).join("");
     }
   }
-  return fallback;
-}
-
-function extractRichText(page, propName) {
-  const p = page?.properties?.[propName];
-  if (!p) return "";
-  if (p.type === "rich_text") return (p.rich_text || []).map((t) => t.plain_text || "").join("").trim();
-  if (p.type === "title") return (p.title || []).map((t) => t.plain_text || "").join("").trim();
   return "";
 }
 
-function compactPage(page, wantedProps = []) {
-  const name = extractTitle(page, "");
-  const out = { name };
-  for (const prop of wantedProps) {
-    out[prop] = extractRichText(page, prop);
-  }
-  out.last_edited_time = page.last_edited_time;
-  return out;
+function extractRich(page, prop) {
+  const p = page.properties[prop];
+  if (!p) return "";
+  if (p.type === "rich_text") return p.rich_text.map(t => t.plain_text).join("");
+  if (p.type === "title") return p.title.map(t => t.plain_text).join("");
+  return "";
 }
 
-async function loadMemorySnapshot() {
-  const [doctrinePages, projetsPages, decisionsPages] = await Promise.all([
-    fetchLatestFromDb(DB_DOCTRINE, 12),
-    fetchLatestFromDb(DB_PROJETS, 12),
-    fetchLatestFromDb(DB_DECISIONS, 12),
+async function loadMemory() {
+  const [doctrine, projets, decisions] = await Promise.all([
+    fetchLatest(DB_DOCTRINE),
+    fetchLatest(DB_PROJETS),
+    fetchLatest(DB_DECISIONS),
   ]);
 
-  const doctrine = doctrinePages.map((p) =>
-    compactPage(p, [PROP_D_RULE, PROP_D_CATEGORY, PROP_D_STATUS])
-  );
-  const projets = projetsPages.map((p) =>
-    compactPage(p, [PROP_P_STATUS, PROP_P_PRIORITY, PROP_P_OBJECTIF, PROP_P_NEXT])
-  );
-  const decisions = decisionsPages.map((p) =>
-    compactPage(p, [PROP_S_DECISION, PROP_S_CONTEXTE, PROP_S_RATIONALE, PROP_S_STATUS])
-  );
-
-  return { doctrine, projets, decisions };
+  return {
+    doctrine: doctrine.map(p => ({
+      nom: extractTitle(p),
+      type: extractRich(p, PROP_D_CATEGORY),
+      contenu: extractRich(p, PROP_D_RULE),
+    })),
+    projets: projets.map(p => ({
+      nom: extractTitle(p),
+      statut: extractRich(p, PROP_P_STATUS),
+      objectif: extractRich(p, PROP_P_OBJECTIF),
+    })),
+    decisions: decisions.map(p => ({
+      nom: extractTitle(p),
+      decision: extractRich(p, PROP_S_DECISION),
+    })),
+  };
 }
 
 // =====================
-// System prompt (Directeur + sous-agents + mémoire)
+// PROMPT
 // =====================
-function buildSystemPrompt(memorySnapshot) {
+function buildSystemPrompt(memory) {
   return `
 Tu es le DIRECTEUR IA d’InnovaCSE.
-Tu es le chef d’orchestre. Tu clarifies, tu arbitres, tu structures, tu mobilises des sous-agents, tu produis, et tu proposes des écritures Notion.
 
-DOCTRINE (obligatoire)
-- InnovaCSE = expert méthodologique CSE/SSCT. La formation est un vecteur, la méthode est le cœur.
-- Sorties : concrètes, structurées, actionnables. Pas de digressions juridiques encyclopédiques.
-- Lignes rouges : jamais conseil disciplinaire, sanction, qualification juridique engageante, remplacement employeur, recommandations RH d’organisation.
-  Formules autorisées : “Le cadre légal prévoit…”, “Le CSE peut…”, “La décision relève de…”. Jamais : “Vous devez…”.
-- Style : phrases courtes. Zéro blabla. Une colonne vertébrale.
+Tu lis la mémoire stratégique et tu décides avec continuité.
 
-SOUS-AGENTS (tu les simules, tu restes décideur)
-A Formation (Qualiopi)
-B Process/Workflow
-C Produit/Offres
-D Vente/Positionnement
-E Communication
-F Veille (sans inventer : indique ce qu’il faut vérifier)
-G Qualité/Conformité (lignes rouges + structure)
+MÉMOIRE ACTUELLE :
+DOCTRINE: ${JSON.stringify(memory.doctrine)}
+PROJETS: ${JSON.stringify(memory.projets)}
+DECISIONS: ${JSON.stringify(memory.decisions)}
 
-MÉMOIRE DISPONIBLE (Notion, extrait récent)
-DOCTRINE_VIVANTE (résumé):
-${JSON.stringify(memorySnapshot.doctrine, null, 2)}
+Tu dois :
+1. Clarifier
+2. Orchestrer
+3. Produire
+4. Proposer écritures Notion
 
-PROJETS (résumé):
-${JSON.stringify(memorySnapshot.projets, null, 2)}
+Réponds UNIQUEMENT en JSON strict :
 
-DECISIONS_STRATEGIQUES (résumé):
-${JSON.stringify(memorySnapshot.decisions, null, 2)}
-
-PROCESSUS (ordre immuable)
-1) CHEF : produire BRIEF_VALIDÉ (si manque info : فرض une hypothèse unique et l’indiquer).
-2) ARCHITECTE : produire PLAN_D’ORCHESTRATION (agents mobilisés + objectifs + livrables).
-3) PRODUCTION : produire par agents (sections séparées) + synthèse directeur.
-4) QUALITÉ : contrôle final.
-5) MÉMOIRE : proposer écritures Notion (journal + doctrine + décisions + projets).
-6) NEXT ACTIONS : 3–7 actions.
-
-FORMAT DE SORTIE
-JSON strict uniquement, clés :
-- brief_valide (string)
-- plan_agents (string)
-- livrable_final (string)
-- ecritures_notion (object) :
-  - journal (string)
-  - doctrine (array of objects) { titre, categorie, statut, contenu }
-  - decisions (array of objects) { titre, decision, contexte, rationale, statut }
-  - projets (array of objects) { titre, statut, priorite, objectif, prochaines_actions }
-- prochaines_actions (array of strings)
-Aucun texte hors JSON.
+{
+  "brief_valide": "...",
+  "plan_agents": "...",
+  "livrable_final": "...",
+  "ecritures_notion": {
+    "journal": "...",
+    "doctrine": [{ "titre": "...", "categorie": "...", "contenu": "..." }],
+    "decisions": [{ "titre": "...", "decision": "...", "contexte": "...", "rationale": "...", "statut": "Active" }],
+    "projets": [{ "titre": "...", "statut": "...", "priorite": "...", "objectif": "...", "prochaines_actions": "..." }]
+  },
+  "prochaines_actions": ["...", "..."]
+}
 `.trim();
-}
-
-// =====================
-// Notion writes
-// =====================
-async function writeJournal({ demande_client, data }) {
-  const now = new Date().toISOString();
-  const props = {};
-  props[PROP_J_TITLE] = title((demande_client || "Run IA").slice(0, 90));
-  setIf(props, PROP_J_DATE, dateProp(now));
-  setIf(props, PROP_J_DECISION, rt("Run Directeur (lecture mémoire → orchestration → écriture multi-bases)"));
-  setIf(props, PROP_J_AGENTS, multiSelect(["Directeur", "Formation", "Process", "Produit", "Vente", "Communication", "Veille", "Qualité"]));
-  setIf(props, PROP_J_RESULT, rt(data?.livrable_final || ""));
-  setIf(props, PROP_J_NEXT, rt((data?.prochaines_actions || []).join(" | ")));
-
-  await notion.pages.create({
-    parent: { database_id: DB_JOURNAL },
-    properties: props,
-  });
-}
-
-async function writeDoctrine(items) {
-  if (!Array.isArray(items) || items.length === 0) return;
-
-  for (const it of items) {
-    const props = {};
-    props[PROP_D_TITLE] = title(it.titre || "Règle");
-    setIf(props, PROP_D_RULE, rt(it.contenu || ""));
-    setIf(props, PROP_D_CATEGORY, select(it.categorie));
-    props[PROP_D_ACTIVE] = { checkbox: true }; // par défaut actif
-
-    await notion.pages.create({
-      parent: { database_id: DB_DOCTRINE },
-      properties: props,
-    });
-  }
-}
-
-async function writeDecisions(items) {
-  if (!Array.isArray(items) || items.length === 0) return;
-  const now = new Date().toISOString();
-  for (const it of items) {
-    const props = {};
-    props[PROP_S_TITLE] = title(it.titre || "Décision");
-    setIf(props, PROP_S_DATE, dateProp(now));
-    setIf(props, PROP_S_DECISION, rt(it.decision || ""));
-    setIf(props, PROP_S_CONTEXTE, rt(it.contexte || ""));
-    setIf(props, PROP_S_RATIONALE, rt(it.rationale || ""));
-    setIf(props, PROP_S_STATUS, select(it.statut || "Active"));
-    await notion.pages.create({ parent: { database_id: DB_DECISIONS }, properties: props });
-  }
-}
-
-async function writeProjects(items) {
-  if (!Array.isArray(items) || items.length === 0) return;
-  const now = new Date().toISOString();
-  for (const it of items) {
-    const props = {};
-    props[PROP_P_TITLE] = title(it.titre || "Projet");
-    setIf(props, PROP_P_STATUS, select(it.statut));
-    setIf(props, PROP_P_PRIORITY, select(it.priorite));
-    setIf(props, PROP_P_OBJECTIF, rt(it.objectif || ""));
-    setIf(props, PROP_P_NEXT, rt(it.prochaines_actions || ""));
-    setIf(props, PROP_P_UPDATED, dateProp(now));
-    await notion.pages.create({ parent: { database_id: DB_PROJETS }, properties: props });
-  }
 }
 
 // =====================
 // ROUTES
 // =====================
-app.get("/", (req, res) => res.status(200).send("OK"));
-
-app.get("/debug-env", (req, res) => {
-  res.json({
-    hasOpenAI: !!process.env.OPENAI_API_KEY,
-    hasNotionToken: !!process.env.NOTION_TOKEN,
-    dbJournal: DB_JOURNAL,
-    dbDoctrine: DB_DOCTRINE,
-    dbProjets: DB_PROJETS,
-    dbDecisions: DB_DECISIONS,
-  });
-});
+app.get("/", (req, res) => res.send("OK"));
 
 app.post("/run", async (req, res) => {
   try {
-    const { demande_client, contexte, contraintes } = req.body || {};
+    const { demande_client, contexte, contraintes } = req.body;
 
-    // 1) Lecture mémoire Notion
-    const memory = await loadMemorySnapshot();
-
-    // 2) Construction prompt directeur
+    const memory = await loadMemory();
     const SYSTEM = buildSystemPrompt(memory);
 
-    const userInput =
-`DEMANDE CLIENT:
-${demande_client || ""}
-
-CONTEXTE:
-${contexte || ""}
-
-CONTRAINTES:
-${contraintes || ""}`.trim();
-
-    // 3) Appel OpenAI
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       temperature: 0.2,
       input: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: userInput },
+        { role: "user", content: `
+DEMANDE: ${demande_client}
+CONTEXTE: ${contexte}
+CONTRAINTES: ${contraintes}
+` }
       ],
     });
 
-    const out = response.output_text?.trim() || "";
-    let data;
-    try {
-      data = JSON.parse(out);
-    } catch {
-      // Si JSON pas strict : on renvoie une erreur (pas de write Notion incohérent)
-      return res.status(500).json({
-        ok: false,
-        error: "Model did not return strict JSON",
-        raw: out.slice(0, 4000),
+    const out = response.output_text?.trim();
+    const data = JSON.parse(out);
+
+    // JOURNAL
+    await notion.pages.create({
+      parent: { database_id: DB_JOURNAL },
+      properties: {
+        [PROP_J_TITLE]: title(demande_client),
+        [PROP_J_DATE]: dateProp(new Date().toISOString()),
+        [PROP_J_RESULT]: rt(data.livrable_final),
+      }
+    });
+
+    // DOCTRINE
+    for (const d of data.ecritures_notion.doctrine || []) {
+      await notion.pages.create({
+        parent: { database_id: DB_DOCTRINE },
+        properties: {
+          [PROP_D_TITLE]: title(d.titre),
+          [PROP_D_RULE]: rt(d.contenu),
+          [PROP_D_CATEGORY]: select(d.categorie),
+          [PROP_D_ACTIVE]: { checkbox: true }
+        }
       });
     }
 
-    // 4) Écritures Notion (journal + autres)
-    await writeJournal({ demande_client, data });
+    // DECISIONS
+    for (const s of data.ecritures_notion.decisions || []) {
+      await notion.pages.create({
+        parent: { database_id: DB_DECISIONS },
+        properties: {
+          [PROP_S_TITLE]: title(s.titre),
+          [PROP_S_DECISION]: rt(s.decision),
+        }
+      });
+    }
 
-    const e = data.ecritures_notion || {};
-    await writeDoctrine(e.doctrine || []);
-    await writeDecisions(e.decisions || []);
-    await writeProjects(e.projets || []);
+    // PROJETS
+    for (const p of data.ecritures_notion.projets || []) {
+      await notion.pages.create({
+        parent: { database_id: DB_PROJETS },
+        properties: {
+          [PROP_P_TITLE]: title(p.titre),
+          [PROP_P_OBJECTIF]: rt(p.objectif),
+        }
+      });
+    }
 
-    return res.json({ ok: true, data });
+    res.json({ ok: true, data });
+
   } catch (err) {
-    return res.status(500).json({
-      ok: false,
-      error: String(err?.message || err),
-    });
+    res.status(500).json({ ok: false, error: String(err) });
   }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Listening on ${port}`));
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Server running");
+});
