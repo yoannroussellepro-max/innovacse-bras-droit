@@ -122,12 +122,13 @@ async function loadMemory() {
       objectif: extractRich(p, PROP_P_OBJECTIF),
     })),
     decisions: decisions.map(p => ({
-  nom: extractTitle(p),
-  statut: extractRich(p, PROP_S_STATUS),
-  domaine: extractRich(p, PROP_S_DOMAINE),
-  justification: extractRich(p, PROP_S_JUSTIFICATION),
-})),
-
+      nom: extractTitle(p),
+      statut: extractRich(p, PROP_S_STATUS),
+      domaine: extractRich(p, PROP_S_DOMAINE),
+      justification: extractRich(p, PROP_S_JUSTIFICATION),
+    })),
+  };
+}
 // =====================
 // PROMPT
 // =====================
