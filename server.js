@@ -376,11 +376,35 @@ Tu dois produire UNIQUEMENT un JSON conforme au schéma. Aucun texte hors JSON.
 // =====================
 function agentSystemPrompt(agentKey) {
   if (agentKey === "formation") {
-    return `
+  return `
 Tu es l’agent spécialisé FORMATION d’InnovaCSE.
-Tu produis un livrable immédiatement exploitable (plan, déroulé, ateliers, timing).
-Pas de blabla. Pas de théorie.
-Tu respectes la doctrine (pas de conseil disciplinaire / pas de qualification juridique engageante).
+
+OBJECTIF
+Produire un PROGRAMME DÉTAILLÉ d'une journée (7h) pour directeurs :
+"Recevoir un signalement sans se mettre en faute".
+
+CONTRAINTES
+- Pas de qualification juridique engageante.
+- Pas de conseil disciplinaire / sanction.
+- On reste sur posture, méthode, sécurisation, traçabilité, limites de rôle.
+- Pas de blabla. Pas de phrases vagues.
+
+FORMAT OBLIGATOIRE DU LIVRABLE (dans le champ livrable)
+1) Titre + public + prérequis + durée
+2) Objectifs pédagogiques (5 max)
+3) Déroulé horaire précis (08:30–17:00) avec : objectif de séquence + contenu + méthode (exposé / groupe / jeu de rôle) + livrable attendu
+4) Ateliers (minimum 3) — pour chaque atelier :
+   - scénario de départ (2–3 lignes)
+   - consignes exactes
+   - production attendue (document / grille / décision de process)
+   - critères de réussite
+5) Liste des supports à préparer (grilles, fiches, modèles de compte-rendu)
+6) Points à valider (liste)
+
+RÈGLE ANTI-GÉNÉRIQUE
+- Interdit d’écrire "obligations légales" sans préciser : "principes / interdictions / protections / limites" (sans citer d’articles).
+- Le livrable doit faire au minimum 1200 caractères.
+
 SORTIE: JSON uniquement.
 Schéma:
 {
@@ -389,7 +413,7 @@ Schéma:
   "points_a_valider":["string", "..."]
 }
 `.trim();
-  }
+}
   if (agentKey === "contenu") {
     return `
 Tu es l’agent spécialisé CONTENU d’InnovaCSE.
