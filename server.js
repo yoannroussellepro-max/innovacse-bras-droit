@@ -170,6 +170,31 @@ async function loadMemory() {
 }
 
 // =====================
+// ENUMS ALIGNÉS NOTION
+// =====================
+// DOCTRINE Type options (Notion "Type")
+const DOCTRINE_TYPES = [
+  "Positionnement",
+  "Ligne rouge",
+  "Méthode",
+  "Structure",
+  "Formation",
+  "Processus interne",
+  "Innovation",
+  "Gouvernance",
+  "Éthique et Transparence",
+  "Prise de décision",
+];
+
+// DECISIONS
+const DECISION_STATUTS = ["Actée", "En réflexion", "Abandonnée", "Active"];
+const DECISION_DOMAINES = ["Formation", "EIRIA", "Vente", "Communication", "Organisation", "Stratégie"];
+
+// PROJETS
+const PROJET_STATUTS = ["Idée", "En cours", "En pause", "Terminé"];
+const PROJET_DOMAINES = ["Formation", "EIRIA", "Vente", "Communication", "Organisation"];
+
+// =====================
 // OPENAI: STRUCTURED OUTPUT SCHEMA
 // =====================
 const OUTPUT_SCHEMA = {
@@ -213,7 +238,7 @@ const OUTPUT_SCHEMA = {
             required: ["titre", "categorie", "contenu", "actif", "version"],
             properties: {
               titre: { type: "string" },
-              categorie: { type: "string" },
+              categorie: { type: "string", enum: DOCTRINE_TYPES },
               contenu: { type: "string" },
               actif: { type: "boolean" },
               version: { type: "string" },
@@ -228,8 +253,8 @@ const OUTPUT_SCHEMA = {
             required: ["titre", "statut", "domaine", "justification", "impact"],
             properties: {
               titre: { type: "string" },
-              statut: { type: "string" },
-              domaine: { type: "string" },
+              statut: { type: "string", enum: DECISION_STATUTS },
+              domaine: { type: "string", enum: DECISION_DOMAINES },
               justification: { type: "string" },
               impact: { type: "string" },
             },
@@ -244,9 +269,9 @@ const OUTPUT_SCHEMA = {
             properties: {
               titre: { type: "string" },
               objectif: { type: "string" },
-              statut: { type: "string" },
-              priorite: { type: "string" },
-              domaine: { type: "string" },
+              statut: { type: "string", enum: PROJET_STATUTS },
+              priorite: { type: "string", enum: ["Haute", "Moyenne", "Basse"] },
+              domaine: { type: "string", enum: PROJET_DOMAINES },
             },
           },
         },
@@ -263,7 +288,7 @@ const OUTPUT_SCHEMA = {
 // =====================
 // DIRECTOR PROMPT
 // =====================
-function buildSystemPrompt(memory) {
+function buildSystemPrompt(memory, isTestMode) {
   return `
 Tu es le Directeur Exécutif IA d’InnovaCSE.
 Tu es le bras droit stratégique du fondateur.
@@ -274,6 +299,10 @@ RÈGLES NON NÉGOCIABLES
 - Refuser la dispersion.
 - Si contradiction avec une décision actée: le signaler.
 - Pas de blabla. Phrases courtes. Concret.
+
+MODE_TEST: ${isTestMode ? "TRUE" : "FALSE"}
+- Si MODE_TEST = TRUE : tu dois retourner ecritures_notion.doctrine = [], ecritures_notion.decisions = [], ecritures_notion.projets = [].
+- Donc AUCUNE écriture de mémoire (hors journal technique qui est géré par le serveur).
 
 DOCTRINE INNOVACSE (OBLIGATOIRE)
 - InnovaCSE = expert méthodologique CSE. La formation est un vecteur. La méthode est le cœur.
@@ -307,11 +336,15 @@ app.get("/debug-env", (req, res) => {
 
 app.post("/run", async (req, res) => {
   try {
-    const { demande_client = "", contexte = "", contraintes = "" } = req.body || {};
+    const { demande_client = "", contexte = "", contraintes = "", mode_test = false } = req.body || {};
+
+    const isTestMode =
+      Boolean(mode_test) ||
+      String(demande_client || "").toUpperCase().startsWith("TEST TECH");
 
     // Load memory from Notion
     const memory = await loadMemory();
-    const SYSTEM = buildSystemPrompt(memory);
+    const SYSTEM = buildSystemPrompt(memory, isTestMode);
 
     const userContent = `
 DEMANDE CLIENT:
@@ -347,7 +380,12 @@ ${contraintes}
 
     const data = JSON.parse(raw);
 
-    // Get DB metas (auto-detect title prop + select options)
+    // Hard safety: even if model fails instruction, we sanitize in test mode
+    if (isTestMode) {
+      data.ecritures_notion = { doctrine: [], decisions: [], projets: [] };
+    }
+
+    // Get DB metas
     const [mJournal, mDoctrine, mProjets, mDecisions] = await Promise.all([
       getDbMeta(DB_JOURNAL),
       getDbMeta(DB_DOCTRINE),
@@ -357,7 +395,7 @@ ${contraintes}
 
     const nowIso = new Date().toISOString();
 
-    // 1) JOURNAL_AGENT_DIRECTEUR
+    // 1) JOURNAL_AGENT_DIRECTEUR (toujours)
     const journalProps = {
       [mJournal.titleProp]: titleProp(demande_client || "Run IA"),
     };
@@ -454,7 +492,7 @@ ${contraintes}
       });
     }
 
-    return res.json({ ok: true, data });
+    return res.json({ ok: true, data, mode_test: isTestMode });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
