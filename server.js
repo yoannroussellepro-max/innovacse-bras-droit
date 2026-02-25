@@ -732,7 +732,7 @@ if (!isTestMode) {
       });
     }
 
-    // 4) PROJETS (écritures issues du modèle)
+   // 4) PROJETS (écritures issues du modèle)
 for (const p of data.ecritures_notion?.projets || []) {
   const props = {
     [mProjets.titleProp]: titleProp(p.titre),
@@ -742,34 +742,15 @@ for (const p of data.ecritures_notion?.projets || []) {
     props["Objectif"] = rich(p.objectif);
   }
 
-  if (mProjets.props["Statut"]?.type === "select") {
-    const sel = safeSelect(mProjets, "Statut", p.statut);
-    if (sel) props["Statut"] = sel;
-  }
+  const statut = safeSelect(mProjets, "Statut", p.statut);
+  if (statut) props["Statut"] = statut;
 
-  if (mProjets.props["Priorité"]?.type === "select") {
-    const sel = safeSelect(mProjets, "Priorité", p.priorite);
-    if (sel) props["Priorité"] = sel;
-  }
+  const prio = safeSelect(mProjets, "Priorité", p.priorite);
+  if (prio) props["Priorité"] = prio;
 
-  if (mProjets.props["Domaine"]?.type === "select") {
-    const sel = safeSelect(mProjets, "Domaine", p.domaine);
-    if (sel) props["Domaine"] = sel;
-  }
+  const dom = safeSelect(mProjets, "Domaine", p.domaine);
+  if (dom) props["Domaine"] = dom;
 
-  const projectTitle = `Programme formation — ${demande_client.slice(0, 60)}`;
-
-// (re)force le titre utilisé pour la recherche + écriture
-props[mProjets.titleProp] = titleProp(projectTitle);
-
-const existingId = await findPageIdByExactTitle(DB_PROJETS, mProjets.titleProp, projectTitle);
-
-if (existingId) {
-  await notion.pages.update({
-    page_id: existingId,
-    properties: props,
-  });
-} else {
   await notion.pages.create({
     parent: { database_id: DB_PROJETS },
     properties: props,
@@ -777,42 +758,41 @@ if (existingId) {
 }
 
 // =====================
-// PROJET AUTO — Formation
+// PROJET AUTO — Formation (ANTI-DOUBLON : update si existe, sinon create)
 // =====================
-if (
-  !isTestMode &&
-  data?.domaine === "Formation" &&
-  data?.nouveau_projet === true
-) {
+if (!isTestMode && data?.domaine === "Formation" && data?.nouveau_projet === true) {
+  const projectTitle = `Programme formation — ${demande_client.slice(0, 60)}`;
+
   const props = {
-    [mProjets.titleProp]: titleProp(
-      `Programme formation — ${demande_client.slice(0, 60)}`
-    ),
+    [mProjets.titleProp]: titleProp(projectTitle),
   };
 
   if (mProjets.props["Objectif"]?.type === "rich_text") {
     props["Objectif"] = rich(data.livrable_final);
   }
 
-  if (mProjets.props["Statut"]?.type === "select") {
-    const sel = safeSelect(mProjets, "Statut", "En cours");
-    if (sel) props["Statut"] = sel;
-  }
+  const statut = safeSelect(mProjets, "Statut", "En cours");
+  if (statut) props["Statut"] = statut;
 
-  if (mProjets.props["Priorité"]?.type === "select") {
-    const sel = safeSelect(mProjets, "Priorité", data.priorite || "Moyenne");
-    if (sel) props["Priorité"] = sel;
-  }
+  const prio = safeSelect(mProjets, "Priorité", data.priorite || "Moyenne");
+  if (prio) props["Priorité"] = prio;
 
-  if (mProjets.props["Domaine"]?.type === "select") {
-    const sel = safeSelect(mProjets, "Domaine", "Formation");
-    if (sel) props["Domaine"] = sel;
-  }
+  const dom = safeSelect(mProjets, "Domaine", "Formation");
+  if (dom) props["Domaine"] = dom;
 
-  await notion.pages.create({
-    parent: { database_id: DB_PROJETS },
-    properties: props,
-  });
+  const existingId = await findPageIdByExactTitle(DB_PROJETS, mProjets.titleProp, projectTitle);
+
+  if (existingId) {
+    await notion.pages.update({
+      page_id: existingId,
+      properties: props,
+    });
+  } else {
+    await notion.pages.create({
+      parent: { database_id: DB_PROJETS },
+      properties: props,
+    });
+  }
 }
 
     return res.json({ ok: true, data, orchestration_results, mode_test: isTestMode });
