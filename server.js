@@ -744,6 +744,19 @@ for (const p of data.ecritures_notion?.projets || []) {
     if (sel) props["Domaine"] = sel;
   }
 
+  const projectTitle = `Programme formation — ${demande_client.slice(0, 60)}`;
+
+// (re)force le titre utilisé pour la recherche + écriture
+props[mProjets.titleProp] = titleProp(projectTitle);
+
+const existingId = await findPageIdByExactTitle(DB_PROJETS, mProjets.titleProp, projectTitle);
+
+if (existingId) {
+  await notion.pages.update({
+    page_id: existingId,
+    properties: props,
+  });
+} else {
   await notion.pages.create({
     parent: { database_id: DB_PROJETS },
     properties: props,
