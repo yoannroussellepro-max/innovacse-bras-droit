@@ -122,11 +122,11 @@ async function loadMemory() {
       objectif: extractRich(p, PROP_P_OBJECTIF),
     })),
     decisions: decisions.map(p => ({
-      nom: extractTitle(p),
-      justification: extractRich(p, PROP_S_JUSTIFICATION),
-    })),
-  };
-}
+  nom: extractTitle(p),
+  statut: extractRich(p, PROP_S_STATUS),
+  domaine: extractRich(p, PROP_S_DOMAINE),
+  justification: extractRich(p, PROP_S_JUSTIFICATION),
+})),
 
 // =====================
 // PROMPT
@@ -213,18 +213,22 @@ CONTRAINTES: ${contraintes}
     }
 
     // DECISIONS
-    for (const s of data.ecritures_notion?.decisions || []) {
-      await notion.pages.create({
-        parent: { database_id: DB_DECISIONS },
-        properties: {
-          [PROP_S_TITLE]: title(s.titre),
-          [PROP_S_DATE]: dateProp(new Date().toISOString()),
-          [PROP_S_STATUS]: select(s.statut || "Active"),
-          [PROP_S_DOMAINE]: select(s.domaine || "Stratégie"),
-          [PROP_S_JUSTIFICATION]: rt(s.rationale || s.decision || "")
-        }
-      });
-    }
+for (const s of data.ecritures_notion.decisions || []) {
+  const props = {
+    [PROP_S_TITLE]: title(s.titre),
+    [PROP_S_JUSTIFICATION]: rt(s.rationale || s.justification || s.decision || ""),
+    [PROP_S_DATE]: dateProp(new Date().toISOString()),
+  };
+
+  // select Notion (doivent exister dans la base)
+  if (s.statut) props[PROP_S_STATUS] = select(s.statut);
+  if (s.domaine) props[PROP_S_DOMAINE] = select(s.domaine);
+
+  await notion.pages.create({
+    parent: { database_id: DB_DECISIONS },
+    properties: props,
+  });
+}
 
     // PROJETS
     for (const p of data.ecritures_notion?.projets || []) {
