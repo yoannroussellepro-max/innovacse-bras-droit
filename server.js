@@ -212,6 +212,7 @@ const OUTPUT_SCHEMA = {
     "livrable_final",
     "ecritures_notion",
     "prochaines_actions",
+    "orchestration",
   ],
   properties: {
     type_demande: { type: "string" },
@@ -282,6 +283,27 @@ const OUTPUT_SCHEMA = {
       type: "array",
       items: { type: "string" },
     },
+
+    orchestration: {
+      type: "object",
+      additionalProperties: false,
+      required: ["mode", "plan"],
+      properties: {
+        mode: { type: "string", enum: ["none", "sync"] },
+        plan: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["agent", "payload"],
+            properties: {
+              agent: { type: "string", enum: ["formation", "contenu", "commercial"] },
+              payload: { type: "object" },
+            },
+          },
+        },
+      },
+    },
   },
 };
 
@@ -310,12 +332,99 @@ DOCTRINE INNOVACSE (OBLIGATOIRE)
 - Lignes rouges: aucun conseil disciplinaire, aucune sanction, aucune qualification juridique engageante, aucune décision à la place d’un acteur, aucune reco RH organisationnelle.
 - Structure pédagogique immuable: Cadre juridique -> Analyse structurée -> Outils mobilisables.
 
+ORCHESTRATION (IMPORTANT)
+- Tu peux demander l’appel d’un agent spécialisé.
+- Si pas besoin: orchestration.mode="none" et plan=[]
+- Si besoin: orchestration.mode="sync" et plan=[{agent, payload}]
+- agent = "formation" si demande = construire / adapter / structurer une formation.
+- agent = "contenu" si demande = écrire du contenu (posts, pages, scripts, supports).
+- agent = "commercial" si demande = offre, pricing, séquence de vente, prospection.
+- payload doit inclure au minimum: demande_client, contexte, contraintes, objectif.
+
 MÉMOIRE NOTION (résumé, à respecter)
 ${JSON.stringify(memory)}
 
 SORTIE
 Tu dois produire UNIQUEMENT un JSON conforme au schéma. Aucun texte hors JSON.
 `.trim();
+}
+
+// =====================
+// INTERNAL AGENTS (PROMPTS)
+// =====================
+function agentSystemPrompt(agentKey) {
+  if (agentKey === "formation") {
+    return `
+Tu es l’agent spécialisé FORMATION d’InnovaCSE.
+Tu produis un livrable immédiatement exploitable (plan, déroulé, ateliers, timing).
+Pas de blabla. Pas de théorie.
+Tu respectes la doctrine (pas de conseil disciplinaire / pas de qualification juridique engageante).
+SORTIE: JSON uniquement.
+Schéma:
+{
+  "agent":"formation",
+  "livrable":"string",
+  "points_a_valider":["string", "..."]
+}
+`.trim();
+  }
+  if (agentKey === "contenu") {
+    return `
+Tu es l’agent spécialisé CONTENU d’InnovaCSE.
+Tu produis des textes prêts à publier (ou supports), structurés et courts.
+Pas de blabla. Pas d’approximation juridique.
+SORTIE: JSON uniquement.
+Schéma:
+{
+  "agent":"contenu",
+  "livrable":"string",
+  "formats":["string", "..."],
+  "points_a_valider":["string", "..."]
+}
+`.trim();
+  }
+  // commercial
+  return `
+Tu es l’agent spécialisé COMMERCIAL d’InnovaCSE.
+Tu produis des éléments concrets (offre, positionnement, pitch, objections, séquence).
+Pas de blabla. Pas de jargon.
+SORTIE: JSON uniquement.
+Schéma:
+{
+  "agent":"commercial",
+  "livrable":"string",
+  "points_a_valider":["string", "..."]
+}
+`.trim();
+}
+
+async function callSpecialist(agentKey, payload) {
+  const SYSTEM = agentSystemPrompt(agentKey);
+  const userContent = JSON.stringify(payload ?? {}, null, 2);
+
+  const r = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    temperature: 0.2,
+    input: [
+      { role: "system", content: SYSTEM },
+      { role: "user", content: userContent },
+    ],
+  });
+
+  const raw = (r.output_text || "").trim();
+  if (!raw) return { ok: false, agent: agentKey, error: "EMPTY_AGENT_OUTPUT" };
+
+  try {
+    const json = JSON.parse(raw);
+    return { ok: true, agent: agentKey, data: json };
+  } catch {
+    // fallback si l'agent ne respecte pas JSON-only
+    return {
+      ok: true,
+      agent: agentKey,
+      data: { agent: agentKey, livrable: raw, points_a_valider: [] },
+    };
+  }
 }
 
 // =====================
@@ -332,6 +441,34 @@ app.get("/debug-env", (req, res) => {
     dbProjets: process.env.NOTION_DB_PROJETS || null,
     dbDecisions: process.env.NOTION_DB_DECISIONS_STRATEGIQUES || null,
   });
+});
+
+// --- Internal agent routes (appel direct possible)
+app.post("/agents/formation", async (req, res) => {
+  try {
+    const out = await callSpecialist("formation", req.body || {});
+    return res.json(out);
+  } catch (err) {
+    return res.status(500).json({ ok: false, agent: "formation", error: String(err?.message || err) });
+  }
+});
+
+app.post("/agents/contenu", async (req, res) => {
+  try {
+    const out = await callSpecialist("contenu", req.body || {});
+    return res.json(out);
+  } catch (err) {
+    return res.status(500).json({ ok: false, agent: "contenu", error: String(err?.message || err) });
+  }
+});
+
+app.post("/agents/commercial", async (req, res) => {
+  try {
+    const out = await callSpecialist("commercial", req.body || {});
+    return res.json(out);
+  } catch (err) {
+    return res.status(500).json({ ok: false, agent: "commercial", error: String(err?.message || err) });
+  }
 });
 
 app.post("/run", async (req, res) => {
@@ -383,6 +520,30 @@ ${contraintes}
     // Hard safety: even if model fails instruction, we sanitize in test mode
     if (isTestMode) {
       data.ecritures_notion = { doctrine: [], decisions: [], projets: [] };
+      data.orchestration = { mode: "none", plan: [] };
+    }
+
+    // Execute orchestration (internal agents) only if NOT test mode
+    let orchestration_results = [];
+    if (!isTestMode && data.orchestration?.mode === "sync" && Array.isArray(data.orchestration?.plan)) {
+      for (const step of data.orchestration.plan) {
+        const agentKey = step?.agent;
+        if (!agentKey) continue;
+
+        const payload = step?.payload || {};
+        const safePayload = {
+          demande_client,
+          contexte,
+          contraintes,
+          objectif: data.livrable_final || data.decision_directeur || "",
+          priorite: data.priorite || "",
+          domaine: data.domaine || "",
+          ...payload,
+        };
+
+        const r = await callSpecialist(agentKey, safePayload);
+        orchestration_results.push(r);
+      }
     }
 
     // Get DB metas
@@ -408,9 +569,17 @@ ${contraintes}
     if (mJournal.props["Prochaine action"]?.type === "rich_text") {
       journalProps["Prochaine action"] = rich((data.prochaines_actions || []).join(" | "), 1900);
     }
+
+    // Agents mobilisés (Directeur + agents réellement appelés)
     if (mJournal.props["Agents mobilisés"]?.type === "multi_select") {
-      const ms = safeMultiSelect(mJournal, "Agents mobilisés", ["Directeur", data.domaine].filter(Boolean));
+      const called = (orchestration_results || []).map((x) => x?.agent).filter(Boolean);
+      const ms = safeMultiSelect(mJournal, "Agents mobilisés", ["Directeur", ...called].filter(Boolean));
       if (ms) journalProps["Agents mobilisés"] = ms;
+    }
+
+    // Résultats agents (si la colonne existe)
+    if (mJournal.props["Résultats agents"]?.type === "rich_text") {
+      journalProps["Résultats agents"] = rich(JSON.stringify(orchestration_results).slice(0, 1900));
     }
 
     await notion.pages.create({
@@ -492,7 +661,7 @@ ${contraintes}
       });
     }
 
-    return res.json({ ok: true, data, mode_test: isTestMode });
+    return res.json({ ok: true, data, orchestration_results, mode_test: isTestMode });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
