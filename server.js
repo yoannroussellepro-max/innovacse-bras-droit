@@ -298,7 +298,7 @@ const OUTPUT_SCHEMA = {
             required: ["agent", "payload"],
             properties: {
               agent: { type: "string", enum: ["formation", "contenu", "commercial"] },
-              payload: { type: "object" },
+              payload: { type: "object", additionalProperties: false },
             },
           },
         },
