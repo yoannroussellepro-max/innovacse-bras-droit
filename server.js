@@ -210,13 +210,14 @@ const OUTPUT_SCHEMA = {
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["titre", "categorie", "contenu", "actif"],
-            properties: {
-              titre: { type: "string" },
-              categorie: { type: "string" },
-              contenu: { type: "string" },
-              actif: { type: "boolean" }
-            }
+            required: ["titre", "categorie", "contenu", "actif", "version"],
+properties: {
+  titre: { type: "string" },
+  categorie: { type: "string" },
+  contenu: { type: "string" },
+  actif: { type: "boolean" },
+  version: { type: "string" }
+}
           }
         },
         decisions: {
