@@ -112,6 +112,19 @@ function safeMultiSelect(meta, propName, values) {
   if (filtered.length === 0) return null;
   return { multi_select: filtered };
 }
+async function findPageIdByExactTitle(database_id, titlePropName, titleText) {
+  const res = await notion.databases.query({
+    database_id,
+    page_size: 1,
+    filter: {
+      property: titlePropName,
+      title: { equals: String(titleText || "") },
+    },
+  });
+
+  const page = (res.results || [])[0];
+  return page?.id || null;
+}
 
 async function fetchLatest(database_id, page_size = 10) {
   const res = await notion.databases.query({
