@@ -143,6 +143,11 @@ DOCTRINE: ${JSON.stringify(memory.doctrine)}
 PROJETS: ${JSON.stringify(memory.projets)}
 DECISIONS: ${JSON.stringify(memory.decisions)}
 
+IMPORTANT :
+- Interdit d'utiliser des blocs de code (pas de ```).
+- Interdit d'ajouter du texte avant ou après le JSON.
+- Réponds par un JSON brut qui commence par { et finit par }.
+  
 Réponds UNIQUEMENT en JSON strict :
 
 {
