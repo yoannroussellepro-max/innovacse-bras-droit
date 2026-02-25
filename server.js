@@ -43,27 +43,27 @@ async function getDbMeta(database_id) {
   const props = db.properties || {};
 
   // Find Title property name
-  let titleProp = null;
+  let titlePropName = null;
   for (const [name, def] of Object.entries(props)) {
     if (def.type === "title") {
-      titleProp = name;
+      titlePropName = name;
       break;
     }
   }
-  if (!titleProp) throw new Error(`No title property found for DB ${database_id}`);
+  if (!titlePropName) throw new Error(`No title property found for DB ${database_id}`);
 
   // Build select options sets
   const selectOptions = new Map();
   for (const [name, def] of Object.entries(props)) {
     if (def.type === "select") {
-      selectOptions.set(name, new Set((def.select?.options || []).map(o => o.name)));
+      selectOptions.set(name, new Set((def.select?.options || []).map((o) => o.name)));
     }
     if (def.type === "multi_select") {
-      selectOptions.set(name, new Set((def.multi_select?.options || []).map(o => o.name)));
+      selectOptions.set(name, new Set((def.multi_select?.options || []).map((o) => o.name)));
     }
   }
 
-  const meta = { titleProp, props, selectOptions };
+  const meta = { titleProp: titlePropName, props, selectOptions };
   cache.dbMeta.set(database_id, meta);
   return meta;
 }
@@ -94,8 +94,8 @@ function safeMultiSelect(meta, propName, values) {
   if (!set) return null;
 
   const filtered = values
-    .filter(v => typeof v === "string" && set.has(v))
-    .map(v => ({ name: v }));
+    .filter((v) => typeof v === "string" && set.has(v))
+    .map((v) => ({ name: v }));
 
   if (filtered.length === 0) return null;
   return { multi_select: filtered };
@@ -114,7 +114,7 @@ function extractTitleValue(page) {
   const props = page.properties || {};
   for (const key in props) {
     const p = props[key];
-    if (p?.type === "title") return (p.title || []).map(t => t.plain_text).join("");
+    if (p?.type === "title") return (p.title || []).map((t) => t.plain_text).join("");
   }
   return "";
 }
@@ -123,10 +123,10 @@ function extractRichValue(page, propName) {
   const p = page.properties?.[propName];
   if (!p) return "";
 
-  if (p.type === "rich_text") return (p.rich_text || []).map(t => t.plain_text).join("");
-  if (p.type === "title") return (p.title || []).map(t => t.plain_text).join("");
+  if (p.type === "rich_text") return (p.rich_text || []).map((t) => t.plain_text).join("");
+  if (p.type === "title") return (p.title || []).map((t) => t.plain_text).join("");
   if (p.type === "select") return p.select?.name || "";
-  if (p.type === "multi_select") return (p.multi_select || []).map(o => o.name).join(", ");
+  if (p.type === "multi_select") return (p.multi_select || []).map((o) => o.name).join(", ");
   if (p.type === "date") return p.date?.start || "";
   if (p.type === "checkbox") return String(!!p.checkbox);
 
@@ -143,22 +143,22 @@ async function loadMemory() {
     fetchLatest(DB_DECISIONS, 10),
   ]);
 
-  // NOTE: on lit de façon tolérante : on prend ce qui est trouvable
   return {
-    doctrine: doctrinePages.map(p => ({
+    doctrine: doctrinePages.map((p) => ({
       titre: extractTitleValue(p),
       type: extractRichValue(p, "Type"),
+      contenu: extractRichValue(p, "Contenu"),
       version: extractRichValue(p, "Version"),
       actif: extractRichValue(p, "Actif"),
     })),
-    projets: projetsPages.map(p => ({
+    projets: projetsPages.map((p) => ({
       titre: extractTitleValue(p),
       objectif: extractRichValue(p, "Objectif"),
       statut: extractRichValue(p, "Statut"),
       priorite: extractRichValue(p, "Priorité"),
       domaine: extractRichValue(p, "Domaine"),
     })),
-    decisions: decisionsPages.map(p => ({
+    decisions: decisionsPages.map((p) => ({
       titre: extractTitleValue(p),
       statut: extractRichValue(p, "Statut"),
       domaine: extractRichValue(p, "Domaine"),
@@ -186,7 +186,7 @@ const OUTPUT_SCHEMA = {
     "structure_qualiopi",
     "livrable_final",
     "ecritures_notion",
-    "prochaines_actions"
+    "prochaines_actions",
   ],
   properties: {
     type_demande: { type: "string" },
@@ -211,14 +211,14 @@ const OUTPUT_SCHEMA = {
             type: "object",
             additionalProperties: false,
             required: ["titre", "categorie", "contenu", "actif", "version"],
-properties: {
-  titre: { type: "string" },
-  categorie: { type: "string" },
-  contenu: { type: "string" },
-  actif: { type: "boolean" },
-  version: { type: "string" }
-}
-          }
+            properties: {
+              titre: { type: "string" },
+              categorie: { type: "string" },
+              contenu: { type: "string" },
+              actif: { type: "boolean" },
+              version: { type: "string" },
+            },
+          },
         },
         decisions: {
           type: "array",
@@ -231,9 +231,9 @@ properties: {
               statut: { type: "string" },
               domaine: { type: "string" },
               justification: { type: "string" },
-              impact: { type: "string" }
-            }
-          }
+              impact: { type: "string" },
+            },
+          },
         },
         projets: {
           type: "array",
@@ -246,18 +246,18 @@ properties: {
               objectif: { type: "string" },
               statut: { type: "string" },
               priorite: { type: "string" },
-              domaine: { type: "string" }
-            }
-          }
-        }
-      }
+              domaine: { type: "string" },
+            },
+          },
+        },
+      },
     },
 
     prochaines_actions: {
       type: "array",
-      items: { type: "string" }
-    }
-  }
+      items: { type: "string" },
+    },
+  },
 };
 
 // =====================
@@ -313,15 +313,16 @@ app.post("/run", async (req, res) => {
     const memory = await loadMemory();
     const SYSTEM = buildSystemPrompt(memory);
 
-    const userContent =
-`DEMANDE CLIENT:
+    const userContent = `
+DEMANDE CLIENT:
 ${demande_client}
 
 CONTEXTE:
 ${contexte}
 
 CONTRAINTES:
-${contraintes}`.trim();
+${contraintes}
+`.trim();
 
     // OpenAI call with strict structured output
     const response = await openai.responses.create({
@@ -329,19 +330,21 @@ ${contraintes}`.trim();
       temperature: 0.2,
       input: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: userContent }
+        { role: "user", content: userContent },
       ],
       text: {
         format: {
           type: "json_schema",
           name: "innovacse_directeur",
           strict: true,
-          schema: OUTPUT_SCHEMA
-        }
-      }
+          schema: OUTPUT_SCHEMA,
+        },
+      },
     });
 
     const raw = (response.output_text || "").trim();
+    if (!raw) throw new Error("Empty model output_text");
+
     const data = JSON.parse(raw);
 
     // Get DB metas (auto-detect title prop + select options)
@@ -354,53 +357,53 @@ ${contraintes}`.trim();
 
     const nowIso = new Date().toISOString();
 
-    // 1) JOURNAL_AGENT_DIRECTEUR (écriture minimale sûre)
-    // Champs attendus (si existent): Date / Résultat produit / Décision prise / Agents mobilisés / Prochaine action
-    // On écrit au minimum: Title + Date + Résultat produit
+    // 1) JOURNAL_AGENT_DIRECTEUR
     const journalProps = {
       [mJournal.titleProp]: titleProp(demande_client || "Run IA"),
     };
 
     if (mJournal.props["Date"]?.type === "date") journalProps["Date"] = dateProp(nowIso);
-    if (mJournal.props["Résultat produit"]?.type === "rich_text") journalProps["Résultat produit"] = rich(data.livrable_final);
-    if (mJournal.props["Décision prise"]?.type === "rich_text") journalProps["Décision prise"] = rich(data.decision_directeur);
+    if (mJournal.props["Résultat produit"]?.type === "rich_text")
+      journalProps["Résultat produit"] = rich(data.livrable_final);
+    if (mJournal.props["Décision prise"]?.type === "rich_text")
+      journalProps["Décision prise"] = rich(data.decision_directeur);
     if (mJournal.props["Prochaine action"]?.type === "rich_text") {
       journalProps["Prochaine action"] = rich((data.prochaines_actions || []).join(" | "), 1900);
     }
     if (mJournal.props["Agents mobilisés"]?.type === "multi_select") {
-      // on met au moins "Directeur" si l'option existe
       const ms = safeMultiSelect(mJournal, "Agents mobilisés", ["Directeur", data.domaine].filter(Boolean));
       if (ms) journalProps["Agents mobilisés"] = ms;
     }
 
     await notion.pages.create({
       parent: { database_id: DB_JOURNAL },
-      properties: journalProps
+      properties: journalProps,
     });
 
-    // 2) DOCTRINE_VIVANTE (si ecritures demandées)
-for (const d of (data.ecritures_notion?.doctrine || [])) {
-  const props = {
-    [mDoctrine.titleProp]: titleProp(d.titre),
-  };
+    // 2) DOCTRINE_VIVANTE
+    for (const d of data.ecritures_notion?.doctrine || []) {
+      const props = {
+        [mDoctrine.titleProp]: titleProp(d.titre),
+      };
 
-  if (mDoctrine.props["Contenu"]?.type === "rich_text") props["Contenu"] = rich(d.contenu);
-  if (mDoctrine.props["Version"]?.type === "rich_text") props["Version"] = rich(d.version ?? "V1");
+      if (mDoctrine.props["Contenu"]?.type === "rich_text") props["Contenu"] = rich(d.contenu);
+      if (mDoctrine.props["Version"]?.type === "rich_text") props["Version"] = rich(d.version ?? "V1");
 
-  if (mDoctrine.props["Type"]?.type === "select") {
-    const s = safeSelect(mDoctrine, "Type", d.categorie);
-    if (s) props["Type"] = s;
-  }
+      if (mDoctrine.props["Type"]?.type === "select") {
+        const s = safeSelect(mDoctrine, "Type", d.categorie);
+        if (s) props["Type"] = s;
+      }
 
-  if (mDoctrine.props["Actif"]?.type === "checkbox") props["Actif"] = { checkbox: !!d.actif };
+      if (mDoctrine.props["Actif"]?.type === "checkbox") props["Actif"] = { checkbox: !!d.actif };
 
-  await notion.pages.create({
-    parent: { database_id: DB_DOCTRINE },
-    properties: props
-  });
-}
-    // 3) DECISIONS_STRATEGIQUES (si ecritures demandées)
-    for (const s of (data.ecritures_notion?.decisions || [])) {
+      await notion.pages.create({
+        parent: { database_id: DB_DOCTRINE },
+        properties: props,
+      });
+    }
+
+    // 3) DECISIONS_STRATEGIQUES
+    for (const s of data.ecritures_notion?.decisions || []) {
       const props = {
         [mDecisions.titleProp]: titleProp(s.titre),
       };
@@ -420,12 +423,12 @@ for (const d of (data.ecritures_notion?.doctrine || [])) {
 
       await notion.pages.create({
         parent: { database_id: DB_DECISIONS },
-        properties: props
+        properties: props,
       });
     }
 
-    // 4) PROJETS (si ecritures demandées)
-    for (const p of (data.ecritures_notion?.projets || [])) {
+    // 4) PROJETS
+    for (const p of data.ecritures_notion?.projets || []) {
       const props = {
         [mProjets.titleProp]: titleProp(p.titre),
       };
@@ -447,12 +450,11 @@ for (const d of (data.ecritures_notion?.doctrine || [])) {
 
       await notion.pages.create({
         parent: { database_id: DB_PROJETS },
-        properties: props
+        properties: props,
       });
     }
 
     return res.json({ ok: true, data });
-
   } catch (err) {
     return res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
