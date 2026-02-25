@@ -187,8 +187,16 @@ CONTRAINTES: ${contraintes}
       ],
     });
 
-    const out = response.output_text?.trim();
-    const data = JSON.parse(out);
+    const out = response.output_text?.trim() || "";
+
+// Nettoyage si le modèle renvoie ```json ... ```
+const cleaned = out
+  .replace(/^```json\s*/i, "")
+  .replace(/^```\s*/i, "")
+  .replace(/```$/i, "")
+  .trim();
+
+const data = JSON.parse(cleaned);
 
     // JOURNAL
     await notion.pages.create({
