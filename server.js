@@ -214,14 +214,13 @@ CONTRAINTES: ${contraintes}
     }
 
     // DECISIONS
-for (const s of data.ecritures_notion.decisions || []) {
+for (const s of data.ecritures_notion?.decisions || []) {
   const props = {
     [PROP_S_TITLE]: title(s.titre),
     [PROP_S_JUSTIFICATION]: rt(s.rationale || s.justification || s.decision || ""),
     [PROP_S_DATE]: dateProp(new Date().toISOString()),
   };
 
-  // select Notion (doivent exister dans la base)
   if (s.statut) props[PROP_S_STATUS] = select(s.statut);
   if (s.domaine) props[PROP_S_DOMAINE] = select(s.domaine);
 
@@ -230,7 +229,6 @@ for (const s of data.ecritures_notion.decisions || []) {
     properties: props,
   });
 }
-
     // PROJETS
     for (const p of data.ecritures_notion?.projets || []) {
       await notion.pages.create({
