@@ -719,32 +719,75 @@ if (!isTestMode) {
       });
     }
 
-    // 4) PROJETS
-    for (const p of data.ecritures_notion?.projets || []) {
-      const props = {
-        [mProjets.titleProp]: titleProp(p.titre),
-      };
+    // 4) PROJETS (écritures issues du modèle)
+for (const p of data.ecritures_notion?.projets || []) {
+  const props = {
+    [mProjets.titleProp]: titleProp(p.titre),
+  };
 
-      if (mProjets.props["Objectif"]?.type === "rich_text") props["Objectif"] = rich(p.objectif);
+  if (mProjets.props["Objectif"]?.type === "rich_text") {
+    props["Objectif"] = rich(p.objectif);
+  }
 
-      if (mProjets.props["Statut"]?.type === "select") {
-        const sel = safeSelect(mProjets, "Statut", p.statut);
-        if (sel) props["Statut"] = sel;
-      }
-      if (mProjets.props["Priorité"]?.type === "select") {
-        const sel = safeSelect(mProjets, "Priorité", p.priorite);
-        if (sel) props["Priorité"] = sel;
-      }
-      if (mProjets.props["Domaine"]?.type === "select") {
-        const sel = safeSelect(mProjets, "Domaine", p.domaine);
-        if (sel) props["Domaine"] = sel;
-      }
+  if (mProjets.props["Statut"]?.type === "select") {
+    const sel = safeSelect(mProjets, "Statut", p.statut);
+    if (sel) props["Statut"] = sel;
+  }
 
-      await notion.pages.create({
-        parent: { database_id: DB_PROJETS },
-        properties: props,
-      });
-    }
+  if (mProjets.props["Priorité"]?.type === "select") {
+    const sel = safeSelect(mProjets, "Priorité", p.priorite);
+    if (sel) props["Priorité"] = sel;
+  }
+
+  if (mProjets.props["Domaine"]?.type === "select") {
+    const sel = safeSelect(mProjets, "Domaine", p.domaine);
+    if (sel) props["Domaine"] = sel;
+  }
+
+  await notion.pages.create({
+    parent: { database_id: DB_PROJETS },
+    properties: props,
+  });
+}
+
+// =====================
+// PROJET AUTO — Formation
+// =====================
+if (
+  !isTestMode &&
+  data?.domaine === "Formation" &&
+  data?.nouveau_projet === true
+) {
+  const props = {
+    [mProjets.titleProp]: titleProp(
+      `Programme formation — ${demande_client.slice(0, 60)}`
+    ),
+  };
+
+  if (mProjets.props["Objectif"]?.type === "rich_text") {
+    props["Objectif"] = rich(data.livrable_final);
+  }
+
+  if (mProjets.props["Statut"]?.type === "select") {
+    const sel = safeSelect(mProjets, "Statut", "En cours");
+    if (sel) props["Statut"] = sel;
+  }
+
+  if (mProjets.props["Priorité"]?.type === "select") {
+    const sel = safeSelect(mProjets, "Priorité", data.priorite || "Moyenne");
+    if (sel) props["Priorité"] = sel;
+  }
+
+  if (mProjets.props["Domaine"]?.type === "select") {
+    const sel = safeSelect(mProjets, "Domaine", "Formation");
+    if (sel) props["Domaine"] = sel;
+  }
+
+  await notion.pages.create({
+    parent: { database_id: DB_PROJETS },
+    properties: props,
+  });
+}
 
     return res.json({ ok: true, data, orchestration_results, mode_test: isTestMode });
   } catch (err) {
