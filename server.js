@@ -42,7 +42,7 @@ const PROP_D_ACTIVE = "Actif";
 const PROP_P_TITLE = "Nom";
 const PROP_P_OBJECTIF = "Objectif";
 
-// Décisions
+// Décisions (base existante chez toi)
 const PROP_S_TITLE = "Nom";
 const PROP_S_DATE = "date";
 const PROP_S_STATUS = "statut";
@@ -59,11 +59,19 @@ const notion = new NotionClient({ auth: NOTION_TOKEN });
 // HELPERS
 // =====================
 function rt(text) {
-  return { rich_text: [{ text: { content: String(text || "").slice(0, 1900) } }] };
+  return {
+    rich_text: [
+      { text: { content: String(text || "").slice(0, 1900) } }
+    ]
+  };
 }
 
 function title(text) {
-  return { title: [{ text: { content: String(text || "").slice(0, 120) } }] };
+  return {
+    title: [
+      { text: { content: String(text || "").slice(0, 120) } }
+    ]
+  };
 }
 
 function dateProp(iso) {
@@ -129,6 +137,7 @@ async function loadMemory() {
     })),
   };
 }
+
 // =====================
 // PROMPT
 // =====================
@@ -144,10 +153,10 @@ PROJETS: ${JSON.stringify(memory.projets)}
 DECISIONS: ${JSON.stringify(memory.decisions)}
 
 IMPORTANT :
-- Interdit d'utiliser des blocs de code (pas de ```).
+- Interdit d'utiliser des blocs de code (pas de \`\`\`).
 - Interdit d'ajouter du texte avant ou après le JSON.
 - Réponds par un JSON brut qui commence par { et finit par }.
-  
+
 Réponds UNIQUEMENT en JSON strict :
 
 {
@@ -183,25 +192,21 @@ app.post("/run", async (req, res) => {
         { role: "system", content: SYSTEM },
         {
           role: "user",
-          content: `
-DEMANDE: ${demande_client}
-CONTEXTE: ${contexte}
-CONTRAINTES: ${contraintes}
-`
+          content: `DEMANDE: ${demande_client}\nCONTEXTE: ${contexte}\nCONTRAINTES: ${contraintes}`
         }
       ],
     });
 
     const out = response.output_text?.trim() || "";
 
-// Nettoyage si le modèle renvoie ```json ... ```
-const cleaned = out
-  .replace(/^```json\s*/i, "")
-  .replace(/^```\s*/i, "")
-  .replace(/```$/i, "")
-  .trim();
+    // Nettoyage si le modèle renvoie malgré tout ```json ... ```
+    const cleaned = out
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
 
-const data = JSON.parse(cleaned);
+    const data = JSON.parse(cleaned);
 
     // JOURNAL
     await notion.pages.create({
@@ -213,7 +218,7 @@ const data = JSON.parse(cleaned);
       }
     });
 
-    // DOCTRINE
+    // DOCTRINE (seulement si non vide)
     for (const d of data.ecritures_notion?.doctrine || []) {
       await notion.pages.create({
         parent: { database_id: DB_DOCTRINE },
@@ -227,21 +232,23 @@ const data = JSON.parse(cleaned);
     }
 
     // DECISIONS
-for (const s of data.ecritures_notion?.decisions || []) {
-  const props = {
-    [PROP_S_TITLE]: title(s.titre),
-    [PROP_S_JUSTIFICATION]: rt(s.rationale || s.justification || s.decision || ""),
-    [PROP_S_DATE]: dateProp(new Date().toISOString()),
-  };
+    for (const s of data.ecritures_notion?.decisions || []) {
+      const props = {
+        [PROP_S_TITLE]: title(s.titre),
+        [PROP_S_JUSTIFICATION]: rt(s.rationale || s.justification || s.decision || ""),
+        [PROP_S_DATE]: dateProp(new Date().toISOString()),
+      };
 
-  if (s.statut) props[PROP_S_STATUS] = select(s.statut);
-  if (s.domaine) props[PROP_S_DOMAINE] = select(s.domaine);
+      // Select Notion: doivent exister dans la base
+      if (s.statut) props[PROP_S_STATUS] = select(s.statut);
+      if (s.domaine) props[PROP_S_DOMAINE] = select(s.domaine);
 
-  await notion.pages.create({
-    parent: { database_id: DB_DECISIONS },
-    properties: props,
-  });
-}
+      await notion.pages.create({
+        parent: { database_id: DB_DECISIONS },
+        properties: props,
+      });
+    }
+
     // PROJETS
     for (const p of data.ecritures_notion?.projets || []) {
       await notion.pages.create({
