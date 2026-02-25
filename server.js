@@ -298,7 +298,17 @@ const OUTPUT_SCHEMA = {
             required: ["agent", "payload"],
             properties: {
               agent: { type: "string", enum: ["formation", "contenu", "commercial"] },
-              payload: { type: "object", additionalProperties: false },
+              payload: {
+                type: "object",
+                additionalProperties: false,
+                required: ["demande_client", "contexte", "contraintes", "objectif"],
+                properties: {
+                  demande_client: { type: "string" },
+                  contexte: { type: "string" },
+                  contraintes: { type: "string" },
+                  objectif: { type: "string" },
+                },
+              },
             },
           },
         },
@@ -339,7 +349,7 @@ ORCHESTRATION (IMPORTANT)
 - agent = "formation" si demande = construire / adapter / structurer une formation.
 - agent = "contenu" si demande = écrire du contenu (posts, pages, scripts, supports).
 - agent = "commercial" si demande = offre, pricing, séquence de vente, prospection.
-- payload doit inclure au minimum: demande_client, contexte, contraintes, objectif.
+- payload doit contenir EXACTEMENT: demande_client, contexte, contraintes, objectif.
 
 MÉMOIRE NOTION (résumé, à respecter)
 ${JSON.stringify(memory)}
@@ -443,7 +453,7 @@ app.get("/debug-env", (req, res) => {
   });
 });
 
-// --- Internal agent routes (appel direct possible)
+// --- Internal agent routes
 app.post("/agents/formation", async (req, res) => {
   try {
     const out = await callSpecialist("formation", req.body || {});
@@ -530,15 +540,15 @@ ${contraintes}
         const agentKey = step?.agent;
         if (!agentKey) continue;
 
+        // payload est strictement limité par le schema
         const payload = step?.payload || {};
+
+        // IMPORTANT: ne pas ajouter de clés supplémentaires (schema strict)
         const safePayload = {
-          demande_client,
-          contexte,
-          contraintes,
-          objectif: data.livrable_final || data.decision_directeur || "",
-          priorite: data.priorite || "",
-          domaine: data.domaine || "",
-          ...payload,
+          demande_client: payload.demande_client ?? demande_client,
+          contexte: payload.contexte ?? contexte,
+          contraintes: payload.contraintes ?? contraintes,
+          objectif: payload.objectif ?? (data.livrable_final || data.decision_directeur || ""),
         };
 
         const r = await callSpecialist(agentKey, safePayload);
