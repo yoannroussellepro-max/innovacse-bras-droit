@@ -563,6 +563,37 @@ ${contraintes}
 
     const data = JSON.parse(raw);
 
+// =====================
+// ORCHESTRATION FORCÉE (sécurité)
+// =====================
+if (!isTestMode) {
+  const txt = `${demande_client} ${contexte} ${contraintes}`.toLowerCase();
+
+  const shouldForceFormation =
+    (data?.domaine && String(data.domaine).toLowerCase().includes("formation")) ||
+    txt.includes("formation") ||
+    txt.includes("programme") ||
+    txt.includes("journée") ||
+    txt.includes("directeur");
+
+  if (shouldForceFormation && (!data.orchestration || data.orchestration.mode !== "sync")) {
+    data.orchestration = {
+      mode: "sync",
+      plan: [
+        {
+          agent: "formation",
+          payload: {
+            demande_client: demande_client || "Demande formation",
+            contexte: contexte || "",
+            contraintes: contraintes || "",
+            objectif: "Programme structuré, ateliers cadrés, livrables attendus, prêt à déployer",
+          },
+        },
+      ],
+    };
+  }
+}
+    
     // Hard safety: even if model fails instruction, we sanitize in test mode
     if (isTestMode) {
       data.ecritures_notion = { doctrine: [], decisions: [], projets: [] };
