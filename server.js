@@ -30,6 +30,18 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const notion = new NotionClient({ auth: NOTION_TOKEN });
 
 // =====================
+// MODE B — absorption livrable agent
+// =====================
+function extractAgentLivrable(orchestration_results) {
+  for (const r of orchestration_results || []) {
+    if (!r?.ok) continue;
+    const livrable = r?.data?.livrable;
+    if (typeof livrable === "string" && livrable.trim().length > 0) return livrable.trim();
+  }
+  return "";
+}
+
+// =====================
 // NOTION HELPERS
 // =====================
 const cache = {
@@ -553,6 +565,14 @@ ${contraintes}
 
         const r = await callSpecialist(agentKey, safePayload);
         orchestration_results.push(r);
+      }
+    }
+
+    // MODE B: absorption du livrable agent dans livrable_final
+    if (!isTestMode) {
+      const agentLivrable = extractAgentLivrable(orchestration_results);
+      if (agentLivrable) {
+        data.livrable_final = agentLivrable;
       }
     }
 
