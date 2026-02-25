@@ -378,24 +378,26 @@ ${contraintes}`.trim();
     });
 
     // 2) DOCTRINE_VIVANTE (si ecritures demandées)
-    for (const d of (data.ecritures_notion?.doctrine || [])) {
-      const props = {
-        [mDoctrine.titleProp]: titleProp(d.titre),
-      };
+for (const d of (data.ecritures_notion?.doctrine || [])) {
+  const props = {
+    [mDoctrine.titleProp]: titleProp(d.titre),
+  };
 
-      if (mDoctrine.props["Version"]?.type === "rich_text") props["Version"] = rich(d.contenu);
-      if (mDoctrine.props["Type"]?.type === "select") {
-        const s = safeSelect(mDoctrine, "Type", d.categorie);
-        if (s) props["Type"] = s;
-      }
-      if (mDoctrine.props["Actif"]?.type === "checkbox") props["Actif"] = { checkbox: !!d.actif };
+  if (mDoctrine.props["Contenu"]?.type === "rich_text") props["Contenu"] = rich(d.contenu);
+  if (mDoctrine.props["Version"]?.type === "rich_text") props["Version"] = rich(d.version ?? "V1");
 
-      await notion.pages.create({
-        parent: { database_id: DB_DOCTRINE },
-        properties: props
-      });
-    }
+  if (mDoctrine.props["Type"]?.type === "select") {
+    const s = safeSelect(mDoctrine, "Type", d.categorie);
+    if (s) props["Type"] = s;
+  }
 
+  if (mDoctrine.props["Actif"]?.type === "checkbox") props["Actif"] = { checkbox: !!d.actif };
+
+  await notion.pages.create({
+    parent: { database_id: DB_DOCTRINE },
+    properties: props
+  });
+}
     // 3) DECISIONS_STRATEGIQUES (si ecritures demandées)
     for (const s of (data.ecritures_notion?.decisions || [])) {
       const props = {
