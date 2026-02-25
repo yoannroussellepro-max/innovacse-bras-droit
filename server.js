@@ -122,10 +122,14 @@ function extractTitleValue(page) {
 function extractRichValue(page, propName) {
   const p = page.properties?.[propName];
   if (!p) return "";
+
   if (p.type === "rich_text") return (p.rich_text || []).map(t => t.plain_text).join("");
   if (p.type === "title") return (p.title || []).map(t => t.plain_text).join("");
   if (p.type === "select") return p.select?.name || "";
   if (p.type === "multi_select") return (p.multi_select || []).map(o => o.name).join(", ");
+  if (p.type === "date") return p.date?.start || "";
+  if (p.type === "checkbox") return String(!!p.checkbox);
+
   return "";
 }
 
